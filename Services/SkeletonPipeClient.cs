@@ -9,6 +9,14 @@ namespace KfuPet.Ipc.Client
         private const string PipeName = "KfuPet.Skeleton";
         private const int DefaultTimeoutMs = 5000;
 
+        /// <summary>
+        /// 响应反序列化选项：不区分字段名大小写，兼容服务端返回 PascalCase 或 camelCase。
+        /// </summary>
+        private static readonly JsonSerializerOptions CaseInsensitiveOptions = new()
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
         private readonly string _pipeName;
         private readonly int _timeoutMs;
         private bool _disposed;
@@ -52,7 +60,7 @@ namespace KfuPet.Ipc.Client
                 return IpcResponse.Fail("Empty response");
             }
 
-            var response = JsonSerializer.Deserialize<IpcResponse>(responseJson);
+            var response = JsonSerializer.Deserialize<IpcResponse>(responseJson, CaseInsensitiveOptions);
             return response ?? IpcResponse.Fail("Invalid response");
         }
 

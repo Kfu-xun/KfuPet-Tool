@@ -274,7 +274,20 @@ namespace KfuPet_Tool.ViewModels
 
             try
             {
-                await Task.Run(() => _pipeClient.SetRotation(SelectedBone.BoneId, SelectedBone.Rotation));
+                var boneId = SelectedBone.BoneId;
+                var targetDegrees = SelectedBone.Rotation;
+                await Task.Run(() => _pipeClient.SetRotation(boneId, targetDegrees));
+
+                var actualDegrees = await Task.Run(() => _pipeClient.GetRotation(boneId));
+                if (actualDegrees.HasValue && Math.Abs(actualDegrees.Value - targetDegrees) > 0.01)
+                {
+                    StatusMessage = $"警告：设置 {SelectedBone.BoneName} 旋转为 {targetDegrees}°，但服务端返回 {actualDegrees.Value}°（可能是 KfuPet 服务端问题）";
+                }
+                else
+                {
+                    StatusMessage = $"已设置 {SelectedBone.BoneName} 旋转为 {targetDegrees}°";
+                }
+
                 await RefreshAllWorldPositionsAsync();
                 RaisePreviewUpdated();
             }
