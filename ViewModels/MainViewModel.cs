@@ -12,6 +12,11 @@ namespace KfuPet_Tool.ViewModels
     {
         private SkeletonPipeClient _pipeClient;
 
+        /// <summary>
+        /// 连接时保存的骨骼初始状态快照，用于"重置"恢复（而非调用 KfuPet 的 ResetBone 归零）。
+        /// </summary>
+        private readonly Dictionary<string, BoneSnapshot> _snapshots = new();
+
         [ObservableProperty]
         private ObservableCollection<BoneInfo> _rootBones = new();
 
@@ -69,6 +74,20 @@ namespace KfuPet_Tool.ViewModels
         private void RaisePreviewUpdated()
         {
             PreviewUpdated?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// 校验数值是否为有限值（非 Infinity / NaN），避免超大输入导致 JSON 序列化失败。
+        /// </summary>
+        private bool IsFinite(double value, string fieldName)
+        {
+            if (double.IsInfinity(value) || double.IsNaN(value))
+            {
+                StatusMessage = $"{fieldName} 值无效，请输入合理范围的数字";
+                MessageBox.Show($"{fieldName} 值无效（{value}），请输入合理范围的数字。", "输入错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+            return true;
         }
 
         [RelayCommand]
@@ -217,6 +236,7 @@ namespace KfuPet_Tool.ViewModels
                         parent.Children.Add(bone);
                     }
                 }
+                SaveSnapshot();
                 RaisePreviewUpdated();
             }
             catch (Exception ex)
@@ -230,6 +250,8 @@ namespace KfuPet_Tool.ViewModels
         private async Task SetPositionAsync()
         {
             if (SelectedBone == null || !IsConnected) return;
+
+            if (!IsFinite(SelectedBone.PositionX, "位置 X") || !IsFinite(SelectedBone.PositionY, "位置 Y")) return;
 
             try
             {
@@ -248,6 +270,8 @@ namespace KfuPet_Tool.ViewModels
         {
             if (SelectedBone == null || !IsConnected) return;
 
+            if (!IsFinite(SelectedBone.Rotation, "旋转角度")) return;
+
             try
             {
                 await Task.Run(() => _pipeClient.SetRotation(SelectedBone.BoneId, SelectedBone.Rotation));
@@ -264,6 +288,8 @@ namespace KfuPet_Tool.ViewModels
         private async Task SetScaleAsync()
         {
             if (SelectedBone == null || !IsConnected) return;
+
+            if (!IsFinite(SelectedBone.ScaleX, "缩放 X") || !IsFinite(SelectedBone.ScaleY, "缩放 Y")) return;
 
             try
             {
@@ -298,16 +324,37 @@ namespace KfuPet_Tool.ViewModels
         {
             if (SelectedBone == null || !IsConnected) return;
 
+            if (!_snapshots.TryGetValue(SelectedBone.BoneId, out var snap))
+            {
+                StatusMessage = "无快照可恢复";
+                return;
+            }
+
             try
             {
-                await Task.Run(() => _pipeClient.ResetBone(SelectedBone.BoneId));
-                await RefreshBoneAsync(SelectedBone);
+                var boneId = SelectedBone.BoneId;
+                await Task.Run(() => _pipeClient.Batch(b =>
+                {
+                    b.SetPosition(boneId, snap.PositionX, snap.PositionY);
+                    b.SetRotation(boneId, snap.Rotation);
+                    b.SetScale(boneId, snap.ScaleX, snap.ScaleY);
+                    b.SetActive(boneId, snap.IsActive);
+                }));
+
+                SelectedBone.PositionX = snap.PositionX;
+                SelectedBone.PositionY = snap.PositionY;
+                SelectedBone.Rotation = snap.Rotation;
+                SelectedBone.ScaleX = snap.ScaleX;
+                SelectedBone.ScaleY = snap.ScaleY;
+                SelectedBone.IsActive = snap.IsActive;
+
                 await RefreshAllWorldPositionsAsync();
                 RaisePreviewUpdated();
+                StatusMessage = $"已恢复骨骼 {SelectedBone.BoneName} 到初始状态";
             }
             catch (Exception ex)
             {
-                StatusMessage = $"重置骨骼失败：{ex.Message}";
+                StatusMessage = $"恢复骨骼失败：{ex.Message}";
             }
         }
 
@@ -316,18 +363,48 @@ namespace KfuPet_Tool.ViewModels
         {
             if (!IsConnected) return;
 
-            var result = MessageBox.Show("确定要重置所有骨骼吗？", "确认", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (_snapshots.Count == 0)
+            {
+                StatusMessage = "无快照可恢复";
+                return;
+            }
+
+            var result = MessageBox.Show("确定要恢复所有骨骼到初始状态吗？", "确认", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (result != MessageBoxResult.Yes) return;
 
             try
             {
-                await Task.Run(() => _pipeClient.ResetAll());
-                await RefreshAsync();
+                await Task.Run(() => _pipeClient.Batch(b =>
+                {
+                    foreach (var kv in _snapshots)
+                    {
+                        b.SetPosition(kv.Key, kv.Value.PositionX, kv.Value.PositionY);
+                        b.SetRotation(kv.Key, kv.Value.Rotation);
+                        b.SetScale(kv.Key, kv.Value.ScaleX, kv.Value.ScaleY);
+                        b.SetActive(kv.Key, kv.Value.IsActive);
+                    }
+                }));
+
+                foreach (var bone in GetAllBones())
+                {
+                    if (_snapshots.TryGetValue(bone.BoneId, out var snap))
+                    {
+                        bone.PositionX = snap.PositionX;
+                        bone.PositionY = snap.PositionY;
+                        bone.Rotation = snap.Rotation;
+                        bone.ScaleX = snap.ScaleX;
+                        bone.ScaleY = snap.ScaleY;
+                        bone.IsActive = snap.IsActive;
+                    }
+                }
+
+                await RefreshAllWorldPositionsAsync();
                 RaisePreviewUpdated();
+                StatusMessage = "已恢复所有骨骼到初始状态";
             }
             catch (Exception ex)
             {
-                StatusMessage = $"重置所有骨骼失败：{ex.Message}";
+                StatusMessage = $"恢复所有骨骼失败：{ex.Message}";
             }
         }
 
@@ -397,6 +474,40 @@ namespace KfuPet_Tool.ViewModels
                     yield return grandChild;
                 }
             }
+        }
+
+        /// <summary>
+        /// 保存当前所有骨骼状态作为快照，供"重置"恢复使用。
+        /// 在连接并加载骨骼树完成后调用一次。
+        /// </summary>
+        private void SaveSnapshot()
+        {
+            _snapshots.Clear();
+            foreach (var bone in GetAllBones())
+            {
+                _snapshots[bone.BoneId] = new BoneSnapshot
+                {
+                    PositionX = bone.PositionX,
+                    PositionY = bone.PositionY,
+                    Rotation = bone.Rotation,
+                    ScaleX = bone.ScaleX,
+                    ScaleY = bone.ScaleY,
+                    IsActive = bone.IsActive
+                };
+            }
+        }
+
+        /// <summary>
+        /// 骨骼状态快照，记录连接时的初始属性值。
+        /// </summary>
+        private class BoneSnapshot
+        {
+            public double PositionX;
+            public double PositionY;
+            public double Rotation;
+            public double ScaleX;
+            public double ScaleY;
+            public bool IsActive;
         }
     }
 }
