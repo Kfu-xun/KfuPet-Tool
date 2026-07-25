@@ -136,8 +136,9 @@ namespace KfuPet_Tool
                     Foreground = Brushes.White,
                     FontSize = 10
                 };
-                Canvas.SetLeft(label, x + 8);
-                Canvas.SetTop(label, y - 6);
+                label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                Canvas.SetLeft(label, x - label.DesiredSize.Width / 2);
+                Canvas.SetTop(label, y + 8);
                 PreviewCanvas.Children.Add(label);
             }
         }

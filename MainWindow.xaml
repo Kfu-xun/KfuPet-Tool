@@ -248,10 +248,10 @@
 
                         <TextBlock Text="操作" FontWeight="Bold" Foreground="#333" Margin="0,8,0,4"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Button Content="重置骨骼" Command="{Binding DataContext.ResetBoneCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                    Padding="10,3" Margin="0,0,5,0"/>
-                            <Button Content="重置全部" Command="{Binding DataContext.ResetAllCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                    Padding="10,3" Background="#FFF0F0" Foreground="Red"/>
+                            <Button Content="恢复骨骼" Command="{Binding DataContext.ResetBoneCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    Padding="10,3" Margin="0,0,5,0" ToolTip="恢复选中骨骼到连接时的初始状态"/>
+                            <Button Content="恢复全部" Command="{Binding DataContext.ResetAllCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    Padding="10,3" Background="#FFF0F0" Foreground="Red" ToolTip="恢复所有骨骼到连接时的初始状态"/>
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
