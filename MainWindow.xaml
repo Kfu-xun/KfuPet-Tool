@@ -25,7 +25,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0" Background="#F5F5F5" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
@@ -85,6 +84,8 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
+                    <RowDefinition Height="4"/>
+                    <RowDefinition Height="180"/>
                 </Grid.RowDefinitions>
 
                 <Border Grid.Row="0" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="10,6">
@@ -104,6 +105,37 @@
                           SelectedItemChanged="BoneTreeView_SelectedItemChanged"
                           BorderThickness="0">
                 </TreeView>
+
+                <GridSplitter Grid.Row="2" Height="4" Background="#E0E0E0" HorizontalAlignment="Stretch"/>
+
+                <Grid Grid.Row="3">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="0,1,0,1" Padding="10,4">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="日志输出" FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="清除" 
+                                    Command="{Binding DataContext.ClearLogCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    Padding="6,2" FontSize="11"/>
+                        </Grid>
+                    </Border>
+                    <ListBox Grid.Row="1" ItemsSource="{Binding LogMessages}" 
+                             BorderThickness="0" Background="White"
+                             FontSize="11" FontFamily="Consolas"
+                             VirtualizingPanel.ScrollUnit="Pixel">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="4,1"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
             </Grid>
 
             <GridSplitter Grid.Column="1" Width="1" Background="#E0E0E0" HorizontalAlignment="Stretch"/>
@@ -257,11 +289,5 @@
                 </StackPanel>
             </ScrollViewer>
         </Grid>
-
-        <StatusBar Grid.Row="2">
-            <StatusBarItem>
-                <TextBlock Text="{Binding StatusMessage}"/>
-            </StatusBarItem>
-        </StatusBar>
     </Grid>
 </Window>

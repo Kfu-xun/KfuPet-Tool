@@ -44,6 +44,11 @@ namespace KfuPet_Tool.ViewModels
         [ObservableProperty]
         private double _canvasHeight = 400;
 
+        /// <summary>
+        /// 日志输出集合，绑定到 UI 下方的日志面板。
+        /// </summary>
+        public ObservableCollection<string> LogMessages { get; } = new();
+
         public event EventHandler? PreviewUpdated;
 
         public MainViewModel()
@@ -77,13 +82,34 @@ namespace KfuPet_Tool.ViewModels
         }
 
         /// <summary>
+        /// 写入日志输出（带时间戳），同时保留到 Fire and forget 的最大 500 条。
+        /// </summary>
+        private void Log(string message)
+        {
+            var entry = $"[{DateTime.Now:HH:mm:ss}] {message}";
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                LogMessages.Insert(0, entry);
+                while (LogMessages.Count > 500)
+                    LogMessages.RemoveAt(LogMessages.Count - 1);
+            });
+        }
+
+        [RelayCommand]
+        private void ClearLog()
+        {
+            LogMessages.Clear();
+            Log("日志已清除");
+        }
+
+        /// <summary>
         /// 校验数值是否为有限值（非 Infinity / NaN），避免超大输入导致 JSON 序列化失败。
         /// </summary>
         private bool IsFinite(double value, string fieldName)
         {
             if (double.IsInfinity(value) || double.IsNaN(value))
             {
-                StatusMessage = $"{fieldName} 值无效，请输入合理范围的数字";
+                Log($"{fieldName} 值无效：{value}，请输入合理范围的数字");
                 MessageBox.Show($"{fieldName} 值无效（{value}），请输入合理范围的数字。", "输入错误", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
@@ -106,6 +132,7 @@ namespace KfuPet_Tool.ViewModels
             {
                 SelectedPipe = null;
                 StatusMessage = "未发现 KfuPet 管道，请确认 KfuPet 已运行";
+                Log("扫描管道：未发现任何 KfuPet 管道");
             }
             else if (pipes.Count == 1)
             {
@@ -113,16 +140,19 @@ namespace KfuPet_Tool.ViewModels
                 if (processCount > 1)
                 {
                     StatusMessage = $"已识别管道：{pipes[0]}（警告：检测到 {processCount} 个 KfuPet 进程，命令可能随机分配到不同实例，建议只保留一个）";
+                    Log($"扫描管道：发现 {pipes[0]}，但检测到 {processCount} 个 KfuPet 进程（可能串扰）");
                 }
                 else
                 {
                     StatusMessage = $"已自动识别管道：{pipes[0]}";
+                    Log($"扫描管道：自动选择 {pipes[0]}");
                 }
             }
             else
             {
                 SelectedPipe = null;
                 StatusMessage = $"发现 {pipes.Count} 个管道，请手动选择";
+                Log($"扫描管道：发现 {pipes.Count} 个管道（{string.Join(", ", pipes)}），请手动选择");
             }
         }
 
@@ -145,17 +175,20 @@ namespace KfuPet_Tool.ViewModels
                 {
                     IsConnected = true;
                     StatusMessage = $"已连接：{SelectedPipe}";
+                    Log($"已连接：{SelectedPipe}，获取到 {boneIds.Count} 个骨骼");
                     await LoadBoneTreeAsync();
                 }
                 else
                 {
                     StatusMessage = "连接失败：未获取到骨骼数据";
+                    Log("连接失败：服务端返回 0 个骨骼");
                 }
             }
             catch (Exception ex)
             {
                 IsConnected = false;
                 StatusMessage = $"连接失败：{ex.Message}";
+                Log($"连接失败：{ex.Message}");
                 MessageBox.Show($"连接失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
@@ -169,6 +202,7 @@ namespace KfuPet_Tool.ViewModels
         {
             IsConnected = false;
             StatusMessage = "已断开";
+            Log("已断开连接");
             RootBones.Clear();
             SelectedBone = null;
         }
@@ -177,6 +211,7 @@ namespace KfuPet_Tool.ViewModels
         private async Task RefreshAsync()
         {
             if (!IsConnected) return;
+            Log("刷新骨骼树...");
             await LoadBoneTreeAsync();
         }
 
@@ -242,6 +277,7 @@ namespace KfuPet_Tool.ViewModels
             catch (Exception ex)
             {
                 StatusMessage = $"加载骨骼树失败：{ex.Message}";
+                Log($"加载骨骼树失败：{ex.Message}");
                 MessageBox.Show($"加载骨骼树失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -257,11 +293,12 @@ namespace KfuPet_Tool.ViewModels
             {
                 await Task.Run(() => _pipeClient.SetPosition(SelectedBone.BoneId, SelectedBone.PositionX, SelectedBone.PositionY));
                 await UpdateWorldPositionAsync(SelectedBone);
+                Log($"已设置 {SelectedBone.BoneName} 位置为 ({SelectedBone.PositionX:F1}, {SelectedBone.PositionY:F1})");
                 RaisePreviewUpdated();
             }
             catch (Exception ex)
             {
-                StatusMessage = $"设置位置失败：{ex.Message}";
+                Log($"设置 {SelectedBone.BoneName} 位置失败：{ex.Message}");
             }
         }
 
@@ -281,11 +318,11 @@ namespace KfuPet_Tool.ViewModels
                 var actualDegrees = await Task.Run(() => _pipeClient.GetRotation(boneId));
                 if (actualDegrees.HasValue && Math.Abs(actualDegrees.Value - targetDegrees) > 0.01)
                 {
-                    StatusMessage = $"警告：设置 {SelectedBone.BoneName} 旋转为 {targetDegrees}°，但服务端返回 {actualDegrees.Value}°（可能是 KfuPet 服务端问题）";
+                    Log($"警告：设置 {SelectedBone.BoneName} 旋转为 {targetDegrees}°，但服务端返回 {actualDegrees.Value}°（可能是 KfuPet 服务端问题）");
                 }
                 else
                 {
-                    StatusMessage = $"已设置 {SelectedBone.BoneName} 旋转为 {targetDegrees}°";
+                    Log($"已设置 {SelectedBone.BoneName} 旋转为 {targetDegrees}°");
                 }
 
                 await RefreshAllWorldPositionsAsync();
@@ -293,7 +330,7 @@ namespace KfuPet_Tool.ViewModels
             }
             catch (Exception ex)
             {
-                StatusMessage = $"设置旋转失败：{ex.Message}";
+                Log($"设置 {SelectedBone.BoneName} 旋转失败：{ex.Message}");
             }
         }
 
@@ -307,12 +344,13 @@ namespace KfuPet_Tool.ViewModels
             try
             {
                 await Task.Run(() => _pipeClient.SetScale(SelectedBone.BoneId, SelectedBone.ScaleX, SelectedBone.ScaleY));
+                Log($"已设置 {SelectedBone.BoneName} 缩放为 ({SelectedBone.ScaleX:F2}, {SelectedBone.ScaleY:F2})");
                 await RefreshAllWorldPositionsAsync();
                 RaisePreviewUpdated();
             }
             catch (Exception ex)
             {
-                StatusMessage = $"设置缩放失败：{ex.Message}";
+                Log($"设置 {SelectedBone.BoneName} 缩放失败：{ex.Message}");
             }
         }
 
@@ -324,11 +362,12 @@ namespace KfuPet_Tool.ViewModels
             try
             {
                 await Task.Run(() => _pipeClient.SetActive(SelectedBone.BoneId, SelectedBone.IsActive));
+                Log($"已{(SelectedBone.IsActive ? "激活" : "隐藏")}骨骼 {SelectedBone.BoneName}");
                 RaisePreviewUpdated();
             }
             catch (Exception ex)
             {
-                StatusMessage = $"设置激活状态失败：{ex.Message}";
+                Log($"设置 {SelectedBone.BoneName} 激活状态失败：{ex.Message}");
             }
         }
 
@@ -339,7 +378,7 @@ namespace KfuPet_Tool.ViewModels
 
             if (!_snapshots.TryGetValue(SelectedBone.BoneId, out var snap))
             {
-                StatusMessage = "无快照可恢复";
+                Log("无快照可恢复");
                 return;
             }
 
@@ -363,11 +402,11 @@ namespace KfuPet_Tool.ViewModels
 
                 await RefreshAllWorldPositionsAsync();
                 RaisePreviewUpdated();
-                StatusMessage = $"已恢复骨骼 {SelectedBone.BoneName} 到初始状态";
+                Log($"已恢复骨骼 {SelectedBone.BoneName} 到初始状态");
             }
             catch (Exception ex)
             {
-                StatusMessage = $"恢复骨骼失败：{ex.Message}";
+                Log($"恢复 {SelectedBone.BoneName} 失败：{ex.Message}");
             }
         }
 
@@ -378,7 +417,7 @@ namespace KfuPet_Tool.ViewModels
 
             if (_snapshots.Count == 0)
             {
-                StatusMessage = "无快照可恢复";
+                Log("无快照可恢复");
                 return;
             }
 
@@ -413,11 +452,11 @@ namespace KfuPet_Tool.ViewModels
 
                 await RefreshAllWorldPositionsAsync();
                 RaisePreviewUpdated();
-                StatusMessage = "已恢复所有骨骼到初始状态";
+                Log("已恢复所有骨骼到初始状态");
             }
             catch (Exception ex)
             {
-                StatusMessage = $"恢复所有骨骼失败：{ex.Message}";
+                Log($"恢复所有骨骼失败：{ex.Message}");
             }
         }
 
