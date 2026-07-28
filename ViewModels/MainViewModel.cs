@@ -103,6 +103,39 @@ namespace KfuPet_Tool.ViewModels
         }
 
         /// <summary>
+        /// 处理操作异常：检测连接丢失并自动断开。
+        /// </summary>
+        /// <returns>true 表示连接已丢失并已自动断开</returns>
+        private bool HandleOperationError(Exception ex, string operation)
+        {
+            Log($"{operation}失败：{ex.Message}");
+
+            if (IsConnected)
+            {
+                DisconnectInternal("检测到连接丢失，已自动断开");
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 手动断开连接（API 返回 false 时调用）。
+        /// </summary>
+        private void HandleDisconnect(string reason)
+        {
+            Log($"{reason}，连接已断开");
+            DisconnectInternal("连接已断开（KfuPet 可能已关闭）");
+        }
+
+        private void DisconnectInternal(string statusMessage)
+        {
+            IsConnected = false;
+            StatusMessage = statusMessage;
+            RootBones.Clear();
+            SelectedBone = null;
+        }
+
+        /// <summary>
         /// 校验数值是否为有限值（非 Infinity / NaN），避免超大输入导致 JSON 序列化失败。
         /// </summary>
         private bool IsFinite(double value, string fieldName)
@@ -291,14 +324,19 @@ namespace KfuPet_Tool.ViewModels
 
             try
             {
-                await Task.Run(() => _pipeClient.SetPosition(SelectedBone.BoneId, SelectedBone.PositionX, SelectedBone.PositionY));
+                var ok = await Task.Run(() => _pipeClient.SetPosition(SelectedBone.BoneId, SelectedBone.PositionX, SelectedBone.PositionY));
+                if (!ok)
+                {
+                    HandleDisconnect("设置位置");
+                    return;
+                }
                 await UpdateWorldPositionAsync(SelectedBone);
                 Log($"已设置 {SelectedBone.BoneName} 位置为 ({SelectedBone.PositionX:F1}, {SelectedBone.PositionY:F1})");
                 RaisePreviewUpdated();
             }
             catch (Exception ex)
             {
-                Log($"设置 {SelectedBone.BoneName} 位置失败：{ex.Message}");
+                HandleOperationError(ex, $"设置 {SelectedBone.BoneName} 位置");
             }
         }
 
@@ -313,7 +351,12 @@ namespace KfuPet_Tool.ViewModels
             {
                 var boneId = SelectedBone.BoneId;
                 var targetDegrees = SelectedBone.Rotation;
-                await Task.Run(() => _pipeClient.SetRotation(boneId, targetDegrees));
+                var ok = await Task.Run(() => _pipeClient.SetRotation(boneId, targetDegrees));
+                if (!ok)
+                {
+                    HandleDisconnect("设置旋转");
+                    return;
+                }
 
                 var actualDegrees = await Task.Run(() => _pipeClient.GetRotation(boneId));
                 if (actualDegrees.HasValue && Math.Abs(actualDegrees.Value - targetDegrees) > 0.01)
@@ -330,7 +373,7 @@ namespace KfuPet_Tool.ViewModels
             }
             catch (Exception ex)
             {
-                Log($"设置 {SelectedBone.BoneName} 旋转失败：{ex.Message}");
+                HandleOperationError(ex, $"设置 {SelectedBone.BoneName} 旋转");
             }
         }
 
@@ -343,14 +386,19 @@ namespace KfuPet_Tool.ViewModels
 
             try
             {
-                await Task.Run(() => _pipeClient.SetScale(SelectedBone.BoneId, SelectedBone.ScaleX, SelectedBone.ScaleY));
+                var ok = await Task.Run(() => _pipeClient.SetScale(SelectedBone.BoneId, SelectedBone.ScaleX, SelectedBone.ScaleY));
+                if (!ok)
+                {
+                    HandleDisconnect("设置缩放");
+                    return;
+                }
                 Log($"已设置 {SelectedBone.BoneName} 缩放为 ({SelectedBone.ScaleX:F2}, {SelectedBone.ScaleY:F2})");
                 await RefreshAllWorldPositionsAsync();
                 RaisePreviewUpdated();
             }
             catch (Exception ex)
             {
-                Log($"设置 {SelectedBone.BoneName} 缩放失败：{ex.Message}");
+                HandleOperationError(ex, $"设置 {SelectedBone.BoneName} 缩放");
             }
         }
 
@@ -367,7 +415,7 @@ namespace KfuPet_Tool.ViewModels
             }
             catch (Exception ex)
             {
-                Log($"设置 {SelectedBone.BoneName} 激活状态失败：{ex.Message}");
+                HandleOperationError(ex, $"设置 {SelectedBone.BoneName} 激活状态");
             }
         }
 
@@ -406,7 +454,7 @@ namespace KfuPet_Tool.ViewModels
             }
             catch (Exception ex)
             {
-                Log($"恢复 {SelectedBone.BoneName} 失败：{ex.Message}");
+                HandleOperationError(ex, $"恢复 {SelectedBone.BoneName}");
             }
         }
 
@@ -456,7 +504,7 @@ namespace KfuPet_Tool.ViewModels
             }
             catch (Exception ex)
             {
-                Log($"恢复所有骨骼失败：{ex.Message}");
+                HandleOperationError(ex, "恢复所有骨骼");
             }
         }
 
@@ -498,9 +546,21 @@ namespace KfuPet_Tool.ViewModels
 
         private async Task RefreshAllWorldPositionsAsync()
         {
-            foreach (var bone in RootBones)
+            try
             {
-                await UpdateWorldPositionAsync(bone);
+                foreach (var bone in RootBones)
+                {
+                    await UpdateWorldPositionAsync(bone);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"刷新世界坐标失败：{ex.Message}");
+                if (IsConnected)
+                {
+                    DisconnectInternal("连接已断开（KfuPet 可能已关闭）");
+                    Log("检测到连接丢失，已自动断开");
+                }
             }
         }
 
