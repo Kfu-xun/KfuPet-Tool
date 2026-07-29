@@ -120,9 +120,14 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="日志输出" FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/>
-                            <Button Grid.Column="1" Content="清除" 
-                                    Command="{Binding DataContext.ClearLogCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                    Padding="6,2" FontSize="11"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button Content="保存" 
+                                        Command="{Binding DataContext.SaveLogCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Padding="6,2" FontSize="11" Margin="0,0,4,0"/>
+                                <Button Content="清除" 
+                                        Command="{Binding DataContext.ClearLogCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Padding="6,2" FontSize="11"/>
+                            </StackPanel>
                         </Grid>
                     </Border>
                     <ListBox Grid.Row="1" ItemsSource="{Binding LogMessages}" 

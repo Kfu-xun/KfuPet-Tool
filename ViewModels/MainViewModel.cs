@@ -102,6 +102,30 @@ namespace KfuPet_Tool.ViewModels
             Log("日志已清除");
         }
 
+        [RelayCommand]
+        private void SaveLog()
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "文本文件 (*.txt)|*.txt|日志文件 (*.log)|*.log|所有文件 (*.*)|*.*",
+                DefaultExt = ".txt",
+                FileName = $"KfuPet_Log_{DateTime.Now:yyyyMMdd_HHmmss}.txt"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                try
+                {
+                    System.IO.File.WriteAllLines(dialog.FileName, LogMessages);
+                    Log("日志已保存到: " + dialog.FileName);
+                }
+                catch (Exception ex)
+                {
+                    Log("日志保存失败: " + ex.Message);
+                }
+            }
+        }
+
         /// <summary>
         /// 处理操作异常：检测连接丢失并自动断开。
         /// </summary>
