@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Timers;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -11,6 +12,7 @@ namespace KfuPet_Tool.ViewModels
     public partial class MainViewModel : ObservableObject
     {
         private SkeletonPipeClient _pipeClient;
+        private System.Timers.Timer? _heartbeatTimer;
 
         [ObservableProperty]
         private ObservableCollection<BoneInfo> _rootBones = new();
@@ -121,37 +123,57 @@ namespace KfuPet_Tool.ViewModels
             }
         }
 
-        /// <summary>
-        /// 处理操作异常：检测连接丢失并自动断开。
-        /// </summary>
-        /// <returns>true 表示连接已丢失并已自动断开</returns>
-        private bool HandleOperationError(Exception ex, string operation)
-        {
-            Log($"{operation}失败：{ex.Message}");
-
-            if (IsConnected)
-            {
-                DisconnectInternal("检测到连接丢失，已自动断开");
-                return true;
-            }
-            return false;
-        }
-
-        /// <summary>
-        /// 手动断开连接（API 返回 false 时调用）。
-        /// </summary>
-        private void HandleDisconnect(string reason)
-        {
-            Log($"{reason}，连接已断开");
-            DisconnectInternal("连接已断开（KfuPet 可能已关闭）");
-        }
-
         private void DisconnectInternal(string statusMessage)
         {
+            StopHeartbeat();
             IsConnected = false;
             StatusMessage = statusMessage;
             RootBones.Clear();
             SelectedBone = null;
+        }
+
+        private void StartHeartbeat()
+        {
+            StopHeartbeat();
+            _heartbeatTimer = new System.Timers.Timer(500);
+            _heartbeatTimer.Elapsed += OnHeartbeatElapsed;
+            _heartbeatTimer.AutoReset = true;
+            _heartbeatTimer.Start();
+        }
+
+        private void StopHeartbeat()
+        {
+            if (_heartbeatTimer != null)
+            {
+                _heartbeatTimer.Stop();
+                _heartbeatTimer.Elapsed -= OnHeartbeatElapsed;
+                _heartbeatTimer.Dispose();
+                _heartbeatTimer = null;
+            }
+        }
+
+        private async void OnHeartbeatElapsed(object? sender, ElapsedEventArgs e)
+        {
+            try
+            {
+                using var cts = new CancellationTokenSource(300);
+                var alive = await _pipeClient.PingAsync(cts.Token);
+                if (!alive)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        if (IsConnected)
+                        {
+                            DisconnectInternal("连接已断开（心跳超时）");
+                            Log("心跳检测失败，已自动断开");
+                        }
+                    });
+                }
+            }
+            catch
+            {
+                // PingAsync 已内部 catch，此处的 catch 以防万一
+            }
         }
 
         /// <summary>
@@ -228,6 +250,7 @@ namespace KfuPet_Tool.ViewModels
                     IsConnected = true;
                     StatusMessage = $"已连接：{SelectedPipe}";
                     Log($"已连接：{SelectedPipe}，获取到 {boneIds.Count} 个骨骼");
+                    StartHeartbeat();
                     await LoadBoneTreeAsync();
                 }
                 else
@@ -252,6 +275,7 @@ namespace KfuPet_Tool.ViewModels
         [RelayCommand]
         private void Disconnect()
         {
+            StopHeartbeat();
             IsConnected = false;
             StatusMessage = "已断开";
             Log("已断开连接");
@@ -336,54 +360,56 @@ namespace KfuPet_Tool.ViewModels
         [RelayCommand]
         private async Task SetPositionAsync()
         {
-            if (SelectedBone == null || !IsConnected) return;
+            var bone = SelectedBone;
+            if (bone == null || !IsConnected) return;
 
-            if (!IsFinite(SelectedBone.PositionX, "位置 X") || !IsFinite(SelectedBone.PositionY, "位置 Y")) return;
+            if (!IsFinite(bone.PositionX, "位置 X") || !IsFinite(bone.PositionY, "位置 Y")) return;
 
             try
             {
-                var ok = await Task.Run(() => _pipeClient.SetPosition(SelectedBone.BoneId, SelectedBone.PositionX, SelectedBone.PositionY));
+                var ok = await Task.Run(() => _pipeClient.SetPosition(bone.BoneId, bone.PositionX, bone.PositionY));
                 if (!ok)
                 {
-                    HandleDisconnect("设置位置");
+                    Log("设置位置失败");
                     return;
                 }
-                await UpdateWorldPositionAsync(SelectedBone);
-                Log($"已设置 {SelectedBone.BoneName} 位置为 ({SelectedBone.PositionX:F1}, {SelectedBone.PositionY:F1})");
+                await UpdateWorldPositionAsync(bone);
+                Log($"已设置 {bone.BoneName} 位置为 ({bone.PositionX:F1}, {bone.PositionY:F1})");
                 RaisePreviewUpdated();
             }
             catch (Exception ex)
             {
-                HandleOperationError(ex, $"设置 {SelectedBone.BoneName} 位置");
+                Log($"设置 {bone.BoneName} 位置失败：{ex.Message}");
             }
         }
 
         [RelayCommand]
         private async Task SetRotationAsync()
         {
-            if (SelectedBone == null || !IsConnected) return;
+            var bone = SelectedBone;
+            if (bone == null || !IsConnected) return;
 
-            if (!IsFinite(SelectedBone.Rotation, "旋转角度")) return;
+            if (!IsFinite(bone.Rotation, "旋转角度")) return;
 
             try
             {
-                var boneId = SelectedBone.BoneId;
-                var targetDegrees = SelectedBone.Rotation;
+                var boneId = bone.BoneId;
+                var targetDegrees = bone.Rotation;
                 var ok = await Task.Run(() => _pipeClient.SetRotation(boneId, targetDegrees));
                 if (!ok)
                 {
-                    HandleDisconnect("设置旋转");
+                    Log("设置旋转失败");
                     return;
                 }
 
                 var actualDegrees = await Task.Run(() => _pipeClient.GetRotation(boneId));
                 if (actualDegrees.HasValue && Math.Abs(actualDegrees.Value - targetDegrees) > 0.01)
                 {
-                    Log($"警告：设置 {SelectedBone.BoneName} 旋转为 {targetDegrees}°，但服务端返回 {actualDegrees.Value}°（可能是 KfuPet 服务端问题）");
+                    Log($"警告：设置 {bone.BoneName} 旋转为 {targetDegrees}°，但服务端返回 {actualDegrees.Value}°（可能是 KfuPet 服务端问题）");
                 }
                 else
                 {
-                    Log($"已设置 {SelectedBone.BoneName} 旋转为 {targetDegrees}°");
+                    Log($"已设置 {bone.BoneName} 旋转为 {targetDegrees}°");
                 }
 
                 await RefreshAllWorldPositionsAsync();
@@ -391,70 +417,73 @@ namespace KfuPet_Tool.ViewModels
             }
             catch (Exception ex)
             {
-                HandleOperationError(ex, $"设置 {SelectedBone.BoneName} 旋转");
+                Log($"设置 {bone.BoneName} 旋转失败：{ex.Message}");
             }
         }
 
         [RelayCommand]
         private async Task SetScaleAsync()
         {
-            if (SelectedBone == null || !IsConnected) return;
+            var bone = SelectedBone;
+            if (bone == null || !IsConnected) return;
 
-            if (!IsFinite(SelectedBone.ScaleX, "缩放 X") || !IsFinite(SelectedBone.ScaleY, "缩放 Y")) return;
+            if (!IsFinite(bone.ScaleX, "缩放 X") || !IsFinite(bone.ScaleY, "缩放 Y")) return;
 
             try
             {
-                var ok = await Task.Run(() => _pipeClient.SetScale(SelectedBone.BoneId, SelectedBone.ScaleX, SelectedBone.ScaleY));
+                var ok = await Task.Run(() => _pipeClient.SetScale(bone.BoneId, bone.ScaleX, bone.ScaleY));
                 if (!ok)
                 {
-                    HandleDisconnect("设置缩放");
+                    Log("设置缩放失败");
                     return;
                 }
-                Log($"已设置 {SelectedBone.BoneName} 缩放为 ({SelectedBone.ScaleX:F2}, {SelectedBone.ScaleY:F2})");
+                Log($"已设置 {bone.BoneName} 缩放为 ({bone.ScaleX:F2}, {bone.ScaleY:F2})");
                 await RefreshAllWorldPositionsAsync();
                 RaisePreviewUpdated();
             }
             catch (Exception ex)
             {
-                HandleOperationError(ex, $"设置 {SelectedBone.BoneName} 缩放");
+                Log($"设置 {bone.BoneName} 缩放失败：{ex.Message}");
             }
         }
 
         [RelayCommand]
         private async Task SetActiveAsync()
         {
-            if (SelectedBone == null || !IsConnected) return;
+            var bone = SelectedBone;
+            if (bone == null || !IsConnected) return;
 
             try
             {
-                await Task.Run(() => _pipeClient.SetActive(SelectedBone.BoneId, SelectedBone.IsActive));
-                Log($"已{(SelectedBone.IsActive ? "激活" : "隐藏")}骨骼 {SelectedBone.BoneName}");
+                await Task.Run(() => _pipeClient.SetActive(bone.BoneId, bone.IsActive));
+                Log($"已{(bone.IsActive ? "激活" : "隐藏")}骨骼 {bone.BoneName}");
                 RaisePreviewUpdated();
             }
             catch (Exception ex)
             {
-                HandleOperationError(ex, $"设置 {SelectedBone.BoneName} 激活状态");
+                Log($"设置 {bone.BoneName} 激活状态失败：{ex.Message}");
             }
         }
 
         [RelayCommand]
         private async Task ResetBoneAsync()
         {
-            if (SelectedBone == null || !IsConnected) return;
+            var bone = SelectedBone;
+            if (bone == null || !IsConnected) return;
 
             try
             {
-                var boneId = SelectedBone.BoneId;
+                var boneId = bone.BoneId;
                 await Task.Run(() => _pipeClient.ResetBone(boneId));
 
-                await RefreshBoneAsync(SelectedBone);
+                await RefreshBoneAsync(bone);
                 await RefreshAllWorldPositionsAsync();
                 RaisePreviewUpdated();
-                Log($"已恢复骨骼 {SelectedBone.BoneName} 到默认状态");
+                Log($"已恢复骨骼 {bone.BoneName} 到默认状态");
             }
             catch (Exception ex)
             {
-                HandleOperationError(ex, $"恢复 {SelectedBone.BoneName}");
+                Log($"恢复 {bone.BoneName} 失败：{ex.Message}");
             }
         }
 
@@ -481,7 +510,7 @@ namespace KfuPet_Tool.ViewModels
             }
             catch (Exception ex)
             {
-                HandleOperationError(ex, "恢复所有骨骼");
+                Log($"恢复所有骨骼失败：{ex.Message}");
             }
         }
 
@@ -533,11 +562,6 @@ namespace KfuPet_Tool.ViewModels
             catch (Exception ex)
             {
                 Log($"刷新世界坐标失败：{ex.Message}");
-                if (IsConnected)
-                {
-                    DisconnectInternal("连接已断开（KfuPet 可能已关闭）");
-                    Log("检测到连接丢失，已自动断开");
-                }
             }
         }
 
