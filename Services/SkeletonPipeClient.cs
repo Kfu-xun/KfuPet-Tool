@@ -7,15 +7,7 @@ namespace KfuPet.Ipc.Client
     public class SkeletonPipeClient : IDisposable
     {
         private const string PipeName = "KfuPet.Skeleton";
-        private const int DefaultTimeoutMs = 500;
-
-        /// <summary>
-        /// 响应反序列化选项：不区分字段名大小写，兼容服务端返回 PascalCase 或 camelCase。
-        /// </summary>
-        private static readonly JsonSerializerOptions CaseInsensitiveOptions = new()
-        {
-            PropertyNameCaseInsensitive = true
-        };
+        private const int DefaultTimeoutMs = 5000;
 
         private readonly string _pipeName;
         private readonly int _timeoutMs;
@@ -60,7 +52,7 @@ namespace KfuPet.Ipc.Client
                 return IpcResponse.Fail("Empty response");
             }
 
-            var response = JsonSerializer.Deserialize<IpcResponse>(responseJson, CaseInsensitiveOptions);
+            var response = JsonSerializer.Deserialize<IpcResponse>(responseJson);
             return response ?? IpcResponse.Fail("Invalid response");
         }
 
@@ -69,7 +61,7 @@ namespace KfuPet.Ipc.Client
             var response = await SendRequestAsync("skeleton", action, parameters, ct);
             if (!response.Success)
             {
-                return default;
+                throw new InvalidOperationException(response.Error ?? "Unknown error");
             }
             if (response.Data == null) return default;
             if (response.Data is JsonElement je)
@@ -95,7 +87,7 @@ namespace KfuPet.Ipc.Client
             var response = await SendRequestAsync("skeleton", action, parameters, ct);
             if (!response.Success)
             {
-                return default;
+                throw new InvalidOperationException(response.Error ?? "Unknown error");
             }
             if (response.Data is JsonElement je) return je;
             return default;
