@@ -12,11 +12,6 @@ namespace KfuPet_Tool.ViewModels
     {
         private SkeletonPipeClient _pipeClient;
 
-        /// <summary>
-        /// 连接时保存的骨骼初始状态快照，用于"重置"恢复（而非调用 KfuPet 的 ResetBone 归零）。
-        /// </summary>
-        private readonly Dictionary<string, BoneSnapshot> _snapshots = new();
-
         [ObservableProperty]
         private ObservableCollection<BoneInfo> _rootBones = new();
 
@@ -328,7 +323,6 @@ namespace KfuPet_Tool.ViewModels
                         parent.Children.Add(bone);
                     }
                 }
-                SaveSnapshot();
                 RaisePreviewUpdated();
             }
             catch (Exception ex)
@@ -448,33 +442,15 @@ namespace KfuPet_Tool.ViewModels
         {
             if (SelectedBone == null || !IsConnected) return;
 
-            if (!_snapshots.TryGetValue(SelectedBone.BoneId, out var snap))
-            {
-                Log("无快照可恢复");
-                return;
-            }
-
             try
             {
                 var boneId = SelectedBone.BoneId;
-                await Task.Run(() => _pipeClient.Batch(b =>
-                {
-                    b.SetPosition(boneId, snap.PositionX, snap.PositionY);
-                    b.SetRotation(boneId, snap.Rotation);
-                    b.SetScale(boneId, snap.ScaleX, snap.ScaleY);
-                    b.SetActive(boneId, snap.IsActive);
-                }));
+                await Task.Run(() => _pipeClient.ResetBone(boneId));
 
-                SelectedBone.PositionX = snap.PositionX;
-                SelectedBone.PositionY = snap.PositionY;
-                SelectedBone.Rotation = snap.Rotation;
-                SelectedBone.ScaleX = snap.ScaleX;
-                SelectedBone.ScaleY = snap.ScaleY;
-                SelectedBone.IsActive = snap.IsActive;
-
+                await RefreshBoneAsync(SelectedBone);
                 await RefreshAllWorldPositionsAsync();
                 RaisePreviewUpdated();
-                Log($"已恢复骨骼 {SelectedBone.BoneName} 到初始状态");
+                Log($"已恢复骨骼 {SelectedBone.BoneName} 到默认状态");
             }
             catch (Exception ex)
             {
@@ -487,44 +463,21 @@ namespace KfuPet_Tool.ViewModels
         {
             if (!IsConnected) return;
 
-            if (_snapshots.Count == 0)
-            {
-                Log("无快照可恢复");
-                return;
-            }
-
-            var result = MessageBox.Show("确定要恢复所有骨骼到初始状态吗？", "确认", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            var result = MessageBox.Show("确定要恢复所有骨骼到默认状态吗？", "确认", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (result != MessageBoxResult.Yes) return;
 
             try
             {
-                await Task.Run(() => _pipeClient.Batch(b =>
-                {
-                    foreach (var kv in _snapshots)
-                    {
-                        b.SetPosition(kv.Key, kv.Value.PositionX, kv.Value.PositionY);
-                        b.SetRotation(kv.Key, kv.Value.Rotation);
-                        b.SetScale(kv.Key, kv.Value.ScaleX, kv.Value.ScaleY);
-                        b.SetActive(kv.Key, kv.Value.IsActive);
-                    }
-                }));
+                await Task.Run(() => _pipeClient.ResetAll());
 
                 foreach (var bone in GetAllBones())
                 {
-                    if (_snapshots.TryGetValue(bone.BoneId, out var snap))
-                    {
-                        bone.PositionX = snap.PositionX;
-                        bone.PositionY = snap.PositionY;
-                        bone.Rotation = snap.Rotation;
-                        bone.ScaleX = snap.ScaleX;
-                        bone.ScaleY = snap.ScaleY;
-                        bone.IsActive = snap.IsActive;
-                    }
+                    await RefreshBoneAsync(bone);
                 }
 
                 await RefreshAllWorldPositionsAsync();
                 RaisePreviewUpdated();
-                Log("已恢复所有骨骼到初始状态");
+                Log("已恢复所有骨骼到默认状态");
             }
             catch (Exception ex)
             {
@@ -612,38 +565,5 @@ namespace KfuPet_Tool.ViewModels
             }
         }
 
-        /// <summary>
-        /// 保存当前所有骨骼状态作为快照，供"重置"恢复使用。
-        /// 在连接并加载骨骼树完成后调用一次。
-        /// </summary>
-        private void SaveSnapshot()
-        {
-            _snapshots.Clear();
-            foreach (var bone in GetAllBones())
-            {
-                _snapshots[bone.BoneId] = new BoneSnapshot
-                {
-                    PositionX = bone.PositionX,
-                    PositionY = bone.PositionY,
-                    Rotation = bone.Rotation,
-                    ScaleX = bone.ScaleX,
-                    ScaleY = bone.ScaleY,
-                    IsActive = bone.IsActive
-                };
-            }
-        }
-
-        /// <summary>
-        /// 骨骼状态快照，记录连接时的初始属性值。
-        /// </summary>
-        private class BoneSnapshot
-        {
-            public double PositionX;
-            public double PositionY;
-            public double Rotation;
-            public double ScaleX;
-            public double ScaleY;
-            public bool IsActive;
-        }
     }
 }
