@@ -11,7 +11,7 @@
              ┌───────────┴───────────┐ 
              │                       │ 
              ▼                       ▼ 
-        NamedPipeServer         HttpServer（后期）
+        NamedPipeServer         HttpServer（后期，安卓调试用，Kestrel）
              │                       │ 
              └───────────┬───────────┘ 
                          ▼ 
@@ -22,6 +22,8 @@
 Skeleton   Memory     Emotion     Vision
 Service    Service    Service     Service
 ```
+
+**安卓调试流程**：安卓设备通过有线/无线 ADB 连接电脑后，安卓端的开发者工具通过 HttpServer 远程调用 KfuPet API，实现骨骼调试与控制。
 
 所有服务共用同一个管道和命令分发器，通过 `service` 字段区分目标服务。本文档主要描述 `skeleton`（骨骼）服务。
 
