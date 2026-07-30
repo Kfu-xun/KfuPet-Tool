@@ -164,7 +164,7 @@ namespace KfuPet_Tool.ViewModels
                     {
                         if (IsConnected)
                         {
-                            DisconnectInternal("连接已断开（心跳超时）");
+                            DisconnectInternal("连接已断开（连接超时）");
                             Log("心跳检测失败，已自动断开");
                         }
                     });
