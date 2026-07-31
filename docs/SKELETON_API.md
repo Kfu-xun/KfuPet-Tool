@@ -1,6 +1,6 @@
-# Skeleton IPC API 文档
+# KfuPet IPC API 文档
 
-> 通过 Named Pipe（命名管道）跨进程调用 KfuPet 骨骼系统。
+> 通过 Named Pipe（命名管道）跨进程调用 KfuPet 的骨骼系统与图片渲染。
 > 适用于开发者工具、管理器等独立外部程序。
 
 ## 架构概览
@@ -40,6 +40,7 @@ Service    Service    Service     Service
 - [心跳检测](#心跳检测)
 - [批量操作](#批量操作)
 - [世界坐标](#世界坐标)
+- [骨骼图片挂载](#骨骼图片挂载)
 - [Action 列表](#action-列表)
 - [骨骼 ID 列表](#骨骼-id-列表)
 
@@ -544,6 +545,7 @@ client.Batch(b =>
 - `Rotate(boneId, deltaDegrees)`
 - `SetActive(boneId, isActive)`
 - `ResetBone(boneId)`
+- `AddAttachment(boneId, attachmentId, name, resourcePath, offsetX, offsetY, pivotX, pivotY, zOrder)` — 挂载图片
 
 **使用场景**：
 - 同时修改多个骨骼属性
@@ -586,6 +588,270 @@ if (worldPos.HasValue)
 
 ---
 
+## 骨骼图片挂载
+
+将图片挂载到骨骼上的机制。图片会跟随骨骼移动和旋转，用于渲染角色的身体部位（头部、躯干、四肢等）。
+
+### 完整流程
+
+从工具端上传图片并挂载到骨骼的标准流程：
+
+```csharp
+using var client = new SkeletonPipeClient();
+
+// 1. 上传图片到指定骨骼目录
+string? path = client.UploadResource("data:image/png;base64,...", boneId: "head");
+
+// 2. 用返回的路径挂载到骨骼
+if (path != null)
+{
+    client.AddAttachment("head", "face", "Face", path);
+}
+```
+
+### UploadResource
+
+将 base64 编码的图片上传到 KfuPet 资源缓存目录，返回本地文件路径。
+
+```csharp
+// 按骨骼分类存储（推荐）
+string? path = client.UploadResource("data:image/png;base64,...", boneId: "head");
+// → Resources/Cache/head/a1b2c3.png
+
+// 不指定骨骼则存入根目录
+string? path = client.UploadResource("data:image/png;base64,...");
+// → Resources/Cache/a1b2c3.png
+```
+
+**对应 action**：`UploadResource`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| base64Data | string | base64 编码的图片数据，支持 data URI 格式 |
+| boneId | string | 可选，指定后存入 `Resources/Cache/{boneId}/` 子目录 |
+
+**返回值**：`string` — 保存后的本地文件路径，失败返回 `null`
+
+**支持的图片格式**：PNG / JPEG / GIF / WebP / BMP
+
+**缓存目录结构**：
+```
+Resources/Cache/
+├── head/
+│   └── a1b2c3.png
+├── body/
+│   └── d4e5f6.png
+├── arm_left_upper/
+│   └── g7h8i9.png
+└── ...
+```
+
+---
+
+### DeleteResource
+
+显式删除缓存目录下的资源文件（仅限 `Resources/Cache/` 内的文件，保证安全）。
+
+```csharp
+// 先移除附件，再删除文件
+client.RemoveAttachment("face");
+client.DeleteResource(path);
+```
+
+**对应 action**：`DeleteResource`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| resourcePath | string | 文件路径（必须位于缓存目录下） |
+
+**返回值**：`bool` — `true` 删除成功，`false` 文件不存在或不在缓存目录
+
+> **注意**：只有缓存目录（`Resources/Cache/`）下的文件才能通过此 API 删除，防止误删用户自定义路径。
+
+---
+
+### AddAttachment
+
+为指定骨骼挂载图片。
+
+```csharp
+bool success = client.AddAttachment(
+    boneId: "head",
+    attachmentId: "face",
+    name: "Face",
+    resourcePath: @"C:\path\to\face.png",
+    offsetX: 0,
+    offsetY: 0,
+    pivotX: 0.5,
+    pivotY: 0.5,
+    zOrder: 0
+);
+```
+
+**对应 action**：`AddAttachment`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| boneId | string | 要绑定的骨骼 ID |
+| attachmentId | string | 唯一 ID |
+| name | string | 图片名称 |
+| resourcePath | string | 图片文件路径（支持绝对路径和 pack URI） |
+| offsetX | double | X 方向偏移（默认 0） |
+| offsetY | double | Y 方向偏移（默认 0） |
+| pivotX | double | 旋转锚点 X（0-1，默认 0.5 居中） |
+| pivotY | double | 旋转锚点 Y（0-1，默认 0.5 居中） |
+| zOrder | int | 渲染层级（默认 0） |
+
+**返回值**：`bool` — `true` 添加成功，`false` 骨骼不存在
+
+> **注意**：`pivotX` / `pivotY` 定义了图片的旋转中心（0=左上角，1=右下角）。默认 `0.5, 0.5` 为图片中心。
+
+### AddAttachmentAsync（异步版本）
+
+```csharp
+bool success = await client.AddAttachmentAsync("head", "face", "Face", @"C:\path\to\face.png");
+```
+
+---
+
+### RemoveAttachment
+
+移除指定图片。
+
+```csharp
+bool success = client.RemoveAttachment("face");
+```
+
+**对应 action**：`RemoveAttachment`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| attachmentId | string | 图片 ID |
+
+**返回值**：`bool` — `true` 移除成功，`false` 图片不存在
+
+---
+
+### SetAttachmentResource
+
+切换图片的当前图片资源（支持运行时换装）。
+
+```csharp
+bool success = client.SetAttachmentResource("face", "happy", @"C:\path\to\face_happy.png");
+```
+
+**对应 action**：`SetAttachmentResource`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| attachmentId | string | 图片 ID |
+| resourceId | string | 资源标识符 |
+| resourcePath | string | 图片文件路径 |
+
+**返回值**：`bool` — `true` 设置成功，`false` 图片不存在
+
+---
+
+### SetAttachmentOffset
+
+调整图片的偏移位置。
+
+```csharp
+bool success = client.SetAttachmentOffset("face", 5, -10);
+```
+
+**对应 action**：`SetAttachmentOffset`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| attachmentId | string | 图片 ID |
+| x | double | X 方向偏移（逻辑像素） |
+| y | double | Y 方向偏移（逻辑像素） |
+
+**返回值**：`bool` — `true` 设置成功，`false` 图片不存在
+
+---
+
+### SetAttachmentVisible
+
+控制图片的显示/隐藏。
+
+```csharp
+client.SetAttachmentVisible("face", false); // 隐藏脸部
+```
+
+**对应 action**：`SetAttachmentVisible`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| attachmentId | string | 图片 ID |
+| visible | bool | 是否显示 |
+
+**返回值**：`bool` — `true` 设置成功，`false` 图片不存在
+
+---
+
+### GetAttachment
+
+获取指定图片的详细信息。
+
+```csharp
+// 需通过原始 JSON 请求，返回完整图片属性对象
+```
+
+**对应 action**：`GetAttachment`
+
+**请求示例**：
+```json
+{ "service": "skeleton", "action": "GetAttachment", "params": { "attachmentId": "face" } }
+```
+
+**成功响应**：
+```json
+{
+  "success": true,
+  "data": {
+    "id": "face",
+    "boneId": "head",
+    "name": "Face",
+    "resourcePath": "C:\\path\\to\\face.png",
+    "offsetX": 0,
+    "offsetY": 0,
+    "pivotX": 0.5,
+    "pivotY": 0.5,
+    "zOrder": 0,
+    "visible": true
+  }
+}
+```
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| attachmentId | string | 图片 ID |
+
+**返回值**：`object` — 包含所有图片属性的 JSON 对象，图片不存在返回 `null`
+
+---
+
+### GetBoneAttachments
+
+获取指定骨骼上所有图片的 ID 列表。
+
+```csharp
+var attachmentIds = client.GetBoneAttachments("head");
+// 返回 ["face", "hair"]
+```
+
+**对应 action**：`GetBoneAttachments`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| boneId | string | 骨骼 ID |
+
+**返回值**：`string[]` — 图片 ID 数组
+
+---
+
 ## Action 列表
 
 > 以下 action 均属于 `skeleton` 服务，请求时需设置 `"service": "skeleton"`。
@@ -612,6 +878,15 @@ if (worldPos.HasValue)
 | `Ping` | 无 | `bool` | 心跳检测，检查服务是否存活 |
 | `Batch` | `operations` (数组) | `bool` | 批量操作 |
 | `GetWorldPosition` | `boneId` | `{x, y}` | 获取世界坐标 |
+| `AddAttachment` | `boneId`, `attachmentId`, `name`, `resourcePath`, `offsetX`, `offsetY`, `pivotX`, `pivotY`, `zOrder` | `bool` | 为骨骼挂载图片 |
+| `UploadResource` | `base64Data`, `boneId`（可选） | `{path}` | 上传图片到资源缓存 |
+| `DeleteResource` | `resourcePath` | `bool` | 删除缓存目录下的资源文件 |
+| `RemoveAttachment` | `attachmentId` | `bool` | 移除图片 |
+| `SetAttachmentResource` | `attachmentId`, `resourceId`, `resourcePath` | `bool` | 切换图片资源 |
+| `SetAttachmentOffset` | `attachmentId`, `x`, `y` | `bool` | 设置图片偏移 |
+| `SetAttachmentVisible` | `attachmentId`, `visible` | `bool` | 设置图片显隐 |
+| `GetAttachment` | `attachmentId` | `object` | 获取图片详情 |
+| `GetBoneAttachments` | `boneId` | `string[]` | 获取骨骼上的图片 ID 列表 |
 
 ---
 
@@ -697,6 +972,26 @@ client.Batch(b =>
     b.SetRotation("arm_left_upper", -15);   // 右臂摆动
     b.SetRotation("arm_right_upper", 15);
 });
+```
+
+### 示例 4：绑定角色图片
+
+```csharp
+using var client = new SkeletonPipeClient();
+
+// 批量绑定身体各部件的图片
+client.Batch(b =>
+{
+    b.AddAttachment("body", "body_img", "Body", @"C:\char\body.png", zOrder: 0);
+    b.AddAttachment("head", "head_img", "Head", @"C:\char\head.png", zOrder: 1);
+    b.AddAttachment("arm_left_upper", "lua_img", "LeftUpperArm", @"C:\char\arm_upper.png", zOrder: 1);
+    b.AddAttachment("arm_left_lower", "lla_img", "LeftLowerArm", @"C:\char\arm_lower.png", zOrder: 2);
+    b.AddAttachment("arm_right_upper", "rua_img", "RightUpperArm", @"C:\char\arm_upper.png", zOrder: 1);
+    b.AddAttachment("arm_right_lower", "rla_img", "RightLowerArm", @"C:\char\arm_lower.png", zOrder: 2);
+});
+
+// 旋转手臂 — 图片会自动跟随骨骼
+client.SetRotation("arm_left_upper", 45);
 ```
 
 ---
