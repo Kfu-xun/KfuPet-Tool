@@ -230,27 +230,31 @@
                                     Padding="10,3" Margin="5,0,0,0" VerticalAlignment="Center"/>
                         </Grid>
 
-                        <TextBlock Text="缩放" FontWeight="Bold" Foreground="#333" Margin="0,8,0,4"/>
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="ScaleX：" VerticalAlignment="Center" Foreground="#666"/>
-                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ScaleX, UpdateSourceTrigger=PropertyChanged}" 
-                                     Padding="3" Margin="0,2"/>
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="ScaleY：" VerticalAlignment="Center" Foreground="#666"/>
-                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ScaleY, UpdateSourceTrigger=PropertyChanged}" 
-                                     Padding="3" Margin="0,2"/>
-                            <Button Grid.Row="0" Grid.Column="2" Grid.RowSpan="2" Content="应用" 
-                                    Command="{Binding DataContext.SetScaleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                    Padding="10,3" Margin="5,0,0,0" VerticalAlignment="Center"/>
-                        </Grid>
+                        <Expander IsExpanded="False" Margin="0,8,0,4">
+                            <Expander.Header>
+                                <TextBlock Text="缩放（测试功能，后期可能会抛弃）" FontWeight="Bold" Foreground="#999" FontSize="12"/>
+                            </Expander.Header>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="ScaleX：" VerticalAlignment="Center" Foreground="#666"/>
+                                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ScaleX, UpdateSourceTrigger=PropertyChanged}" 
+                                         Padding="3" Margin="0,2"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="ScaleY：" VerticalAlignment="Center" Foreground="#666"/>
+                                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ScaleY, UpdateSourceTrigger=PropertyChanged}" 
+                                         Padding="3" Margin="0,2"/>
+                                <Button Grid.Row="0" Grid.Column="2" Grid.RowSpan="2" Content="应用" 
+                                        Command="{Binding DataContext.SetScaleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        Padding="10,3" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Expander>
 
                         <TextBlock Text="状态" FontWeight="Bold" Foreground="#333" Margin="0,8,0,4"/>
                         <Grid Margin="0,0,0,8">
@@ -290,6 +294,37 @@
                             <Button Content="恢复全部" Command="{Binding DataContext.ResetAllCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                     Padding="10,3" Background="#FFF0F0" Foreground="Red" ToolTip="恢复所有骨骼到连接时的初始状态"/>
                         </StackPanel>
+
+                        <TextBlock Text="图片挂载" FontWeight="Bold" Foreground="#333" Margin="0,8,0,4"/>
+                        <ListBox ItemsSource="{Binding Attachments}" 
+                                 MinHeight="60" MaxHeight="150" Margin="0,0,0,8"
+                                 BorderBrush="#E0E0E0" BorderThickness="1">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:AttachmentInfo}">
+                                    <Grid Margin="4,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox Grid.Column="0" IsChecked="{Binding Visible}" 
+                                                  VerticalAlignment="Center" Margin="0,0,4,0"
+                                                  Checked="AttachmentVisible_Changed" 
+                                                  Unchecked="AttachmentVisible_Changed"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}" 
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        <Button Grid.Column="2" Content="✕" Padding="4,1" FontSize="10"
+                                                Click="RemoveAttachment_Click"
+                                                Background="#FFEEEE" Foreground="Red"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <Button Content="挂载图片" 
+                                Command="{Binding DataContext.UploadAndAddAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                Padding="10,3" Margin="0,0,0,8" 
+                                IsEnabled="{Binding DataContext.IsConnected, RelativeSource={RelativeSource AncestorType=Window}}"/>
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

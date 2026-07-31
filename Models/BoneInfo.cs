@@ -40,6 +40,8 @@ namespace KfuPet_Tool.Models
 
         public ObservableCollection<BoneInfo> Children { get; } = new();
 
+        public ObservableCollection<AttachmentInfo> Attachments { get; } = new();
+
         public bool HasChildren => Children.Count > 0;
     }
 }

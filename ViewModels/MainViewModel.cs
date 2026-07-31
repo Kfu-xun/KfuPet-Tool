@@ -73,6 +73,14 @@ namespace KfuPet_Tool.ViewModels
             }
         }
 
+        partial void OnSelectedBoneChanged(BoneInfo? value)
+        {
+            if (value != null && IsConnected)
+            {
+                _ = LoadAttachmentsForBoneAsync(value);
+            }
+        }
+
         private void RaisePreviewUpdated()
         {
             PreviewUpdated?.Invoke(this, EventArgs.Empty);
@@ -586,6 +594,157 @@ namespace KfuPet_Tool.ViewModels
                 {
                     yield return grandChild;
                 }
+            }
+        }
+
+        private async Task LoadAttachmentsForBoneAsync(BoneInfo bone)
+        {
+            try
+            {
+                var ids = await Task.Run(() => _pipeClient.GetBoneAttachments(bone.BoneId));
+
+                System.Windows.Application.Current.Dispatcher.Invoke(() => bone.Attachments.Clear());
+
+                foreach (var id in ids)
+                {
+                    var je = await Task.Run(() => _pipeClient.GetAttachment(id));
+                    if (je == null) continue;
+
+                    var att = new AttachmentInfo
+                    {
+                        Id = je.Value.GetProperty("id").GetString() ?? id,
+                        BoneId = je.Value.GetProperty("boneId").GetString() ?? bone.BoneId,
+                        Name = je.Value.GetProperty("name").GetString() ?? "",
+                        ResourcePath = je.Value.GetProperty("resourcePath").GetString() ?? "",
+                        OffsetX = je.Value.GetProperty("offsetX").GetDouble(),
+                        OffsetY = je.Value.GetProperty("offsetY").GetDouble(),
+                        PivotX = je.Value.GetProperty("pivotX").GetDouble(),
+                        PivotY = je.Value.GetProperty("pivotY").GetDouble(),
+                        ZOrder = je.Value.GetProperty("zOrder").GetInt32(),
+                        Visible = je.Value.GetProperty("visible").GetBoolean()
+                    };
+
+                    System.Windows.Application.Current.Dispatcher.Invoke(() => bone.Attachments.Add(att));
+                }
+
+                if (ids.Count > 0)
+                    Log($"已加载骨骼 {bone.BoneName} 的 {ids.Count} 个图片");
+            }
+            catch (Exception ex)
+            {
+                Log($"加载附件列表失败：{ex.Message}");
+            }
+        }
+
+        [RelayCommand]
+        private async Task UploadAndAddAttachmentAsync()
+        {
+            var bone = SelectedBone;
+            if (bone == null || !IsConnected) return;
+
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "图片文件 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp|所有文件 (*.*)|*.*",
+                Title = "选择要挂载的图片"
+            };
+
+            if (dialog.ShowDialog() != true) return;
+
+            try
+            {
+                var bytes = await Task.Run(() => System.IO.File.ReadAllBytes(dialog.FileName));
+                var base64 = Convert.ToBase64String(bytes);
+                var ext = System.IO.Path.GetExtension(dialog.FileName).TrimStart('.').ToLower();
+                var dataUri = $"data:image/{ext};base64,{base64}";
+
+                var path = await Task.Run(() => _pipeClient.UploadResource(dataUri, bone.BoneId));
+                if (path == null)
+                {
+                    Log("上传图片失败：服务端返回空路径");
+                    MessageBox.Show("上传图片失败", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                var attachmentId = $"{bone.BoneId}_img_{DateTime.Now:HHmmss}";
+                var name = System.IO.Path.GetFileNameWithoutExtension(dialog.FileName);
+
+                var ok = await Task.Run(() => _pipeClient.AddAttachment(bone.BoneId, attachmentId, name, path));
+                if (!ok)
+                {
+                    Log($"挂载图片失败：骨骼 {bone.BoneName} 可能不存在");
+                    return;
+                }
+
+                Log($"已挂载图片 {name} 到骨骼 {bone.BoneName}");
+                await LoadAttachmentsForBoneAsync(bone);
+                RaisePreviewUpdated();
+            }
+            catch (Exception ex)
+            {
+                Log($"挂载图片失败：{ex.Message}");
+                MessageBox.Show($"挂载图片失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        [RelayCommand]
+        private async Task RemoveAttachmentAsync(AttachmentInfo? attachment)
+        {
+            if (attachment == null || SelectedBone == null || !IsConnected) return;
+
+            var result = MessageBox.Show($"确定要移除图片 \"{attachment.Name}\" 吗？", "确认",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result != MessageBoxResult.Yes) return;
+
+            try
+            {
+                var ok = await Task.Run(() => _pipeClient.RemoveAttachment(attachment.Id));
+                if (ok)
+                {
+                    Log($"已移除图片 {attachment.Name}");
+                    SelectedBone.Attachments.Remove(attachment);
+                    RaisePreviewUpdated();
+
+                    var resourcePath = attachment.ResourcePath;
+                    if (!string.IsNullOrEmpty(resourcePath))
+                    {
+                        var deleteResult = MessageBox.Show(
+                            $"是否同时删除缓存中的资源文件？\n{resourcePath}",
+                            "清理缓存", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                        if (deleteResult == MessageBoxResult.Yes)
+                        {
+                            var deleted = await Task.Run(() => _pipeClient.DeleteResource(resourcePath));
+                            Log(deleted ? $"已删除资源文件：{resourcePath}" : $"删除资源文件失败（可能不在缓存目录）：{resourcePath}");
+                        }
+                    }
+                }
+                else
+                {
+                    Log($"移除图片 {attachment.Name} 失败");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"移除图片失败：{ex.Message}");
+            }
+        }
+
+        [RelayCommand]
+        private async Task ToggleAttachmentVisibleAsync(AttachmentInfo? attachment)
+        {
+            if (attachment == null || !IsConnected) return;
+
+            try
+            {
+                var ok = await Task.Run(() => _pipeClient.SetAttachmentVisible(attachment.Id, attachment.Visible));
+                if (ok)
+                {
+                    Log($"已{(attachment.Visible ? "显示" : "隐藏")}图片 {attachment.Name}");
+                    RaisePreviewUpdated();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"设置图片可见性失败：{ex.Message}");
             }
         }
 

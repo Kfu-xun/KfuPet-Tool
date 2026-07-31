@@ -48,6 +48,22 @@ namespace KfuPet_Tool
             }
         }
 
+        private void AttachmentVisible_Changed(object sender, RoutedEventArgs e)
+        {
+            if (sender is CheckBox cb && cb.DataContext is AttachmentInfo att)
+            {
+                _viewModel.ToggleAttachmentVisibleCommand.Execute(att);
+            }
+        }
+
+        private void RemoveAttachment_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.DataContext is AttachmentInfo att)
+            {
+                _viewModel.RemoveAttachmentCommand.Execute(att);
+            }
+        }
+
         private void DrawPreview()
         {
             PreviewCanvas.Children.Clear();
