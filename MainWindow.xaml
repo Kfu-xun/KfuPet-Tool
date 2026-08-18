@@ -40,6 +40,9 @@
                 <Separator/>
                 <MenuItem Header="清除日志(_C)" Command="{Binding ClearLogCommand}"/>
             </MenuItem>
+            <MenuItem Header="工具(_T)">
+                <MenuItem Header="服务端日志(_L)" Click="ServerLog_Click"/>
+            </MenuItem>
             <MenuItem Header="帮助(_H)">
                 <MenuItem Header="关于(_A)" Click="About_Click"/>
             </MenuItem>

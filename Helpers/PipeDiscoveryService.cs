@@ -11,6 +11,7 @@ namespace KfuPet_Tool.Helpers
         private const string PipeRootPath = @"\\.\pipe\";
         private const string KfuPetPrefix = "KfuPet";
         private const string KfuPetProcessName = "KfuPet";
+        private const string KfuPetLogPipeName = "KfuPet.Log";
 
         /// <summary>
         /// 扫描系统中所有以 "KfuPet" 开头的命名管道。
@@ -32,6 +33,12 @@ namespace KfuPet_Tool.Helpers
 
                     if (name.StartsWith(KfuPetPrefix, StringComparison.OrdinalIgnoreCase))
                     {
+                        // 日志管道由独立的日志窗口负责，主窗口只连接骨骼命令管道。
+                        if (name.Equals(KfuPetLogPipeName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
                         result.Add(name);
                     }
                 }

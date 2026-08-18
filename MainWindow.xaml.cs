@@ -11,6 +11,7 @@ namespace KfuPet_Tool
     public partial class MainWindow : Window
     {
         private MainViewModel _viewModel;
+        private LogWindow? _logWindow;
 
         public MainWindow()
         {
@@ -109,6 +110,18 @@ namespace KfuPet_Tool
         private void Exit_Click(object sender, RoutedEventArgs e)
         {
             Close();
+        }
+
+        private void ServerLog_Click(object sender, RoutedEventArgs e)
+        {
+            if (_logWindow == null)
+            {
+                _logWindow = new LogWindow { Owner = this };
+                _logWindow.Closed += (_, _) => _logWindow = null;
+            }
+
+            _logWindow.Show();
+            _logWindow.Activate();
         }
 
         private void About_Click(object sender, RoutedEventArgs e)
