@@ -724,6 +724,13 @@ namespace KfuPet_Tool.ViewModels
             var bone = SelectedBone;
             if (bone == null || !IsConnected) return;
 
+            if (bone.IsRoot)
+            {
+                Log($"骨骼 {bone.BoneName} 是根骨骼，不承载图片资源");
+                MessageBox.Show("根骨骼是世界锚点，不承载图片资源，请选择其他骨骼。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
                 Filter = "图片文件 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp|所有文件 (*.*)|*.*",

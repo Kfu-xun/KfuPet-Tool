@@ -58,5 +58,15 @@ namespace KfuPet_Tool.Models
         public ObservableCollection<AttachmentInfo> Attachments { get; } = new();
 
         public bool HasChildren => Children.Count > 0;
+
+        /// <summary>
+        /// 是否为根骨骼（无父骨骼）。根骨骼是世界锚点，不承载图片资源。
+        /// </summary>
+        public bool IsRoot => string.IsNullOrEmpty(ParentBoneId);
+
+        partial void OnParentBoneIdChanged(string? value)
+        {
+            OnPropertyChanged(nameof(IsRoot));
+        }
     }
 }

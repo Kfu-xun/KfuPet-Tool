@@ -421,8 +421,19 @@
 
                         <Button Content="挂载图片" 
                                 Command="{Binding DataContext.UploadAndAddAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                Padding="10,3" Margin="0,0,0,8" 
-                                IsEnabled="{Binding DataContext.IsConnected, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                Padding="10,3" Margin="0,0,0,8">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="IsEnabled" Value="{Binding DataContext.IsConnected, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRoot}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Setter Property="ToolTip" Value="root 骨骼是世界锚点，不承载图片资源"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>
