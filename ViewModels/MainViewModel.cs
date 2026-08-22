@@ -265,7 +265,7 @@ namespace KfuPet_Tool.ViewModels
             IsLoading = true;
             try
             {
-                var boneIds = await Task.Run(() => _pipeClient.GetBoneIds());
+                var boneIds = await _pipeClient.GetBoneIdsAsync();
                 if (boneIds.Count > 0)
                 {
                     IsConnected = true;

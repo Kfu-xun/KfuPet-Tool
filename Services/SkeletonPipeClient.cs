@@ -23,13 +23,21 @@ namespace KfuPet.Ipc.Client
         {
             using var client = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
 
+            // 连接、写请求、读响应全程都受超时约束，避免服务端管道存在但不回包时无限阻塞。
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(_timeoutMs);
+
             try
             {
-                await client.ConnectAsync(_timeoutMs, ct);
+                await client.ConnectAsync(_timeoutMs, timeoutCts.Token);
             }
             catch (TimeoutException)
             {
-                return IpcResponse.Fail("Connection timeout");
+                return IpcResponse.Fail("连接超时");
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                return IpcResponse.Fail("连接超时");
             }
 
             using var reader = new StreamReader(client);
@@ -44,16 +52,27 @@ namespace KfuPet.Ipc.Client
                     : null
             };
 
-            await writer.WriteLineAsync(JsonSerializer.Serialize(request).AsMemory(), ct);
-            var responseJson = await reader.ReadLineAsync(ct);
-
-            if (string.IsNullOrEmpty(responseJson))
+            try
             {
-                return IpcResponse.Fail("Empty response");
-            }
+                await writer.WriteLineAsync(JsonSerializer.Serialize(request).AsMemory(), timeoutCts.Token);
+                var responseJson = await reader.ReadLineAsync(timeoutCts.Token);
 
-            var response = JsonSerializer.Deserialize<IpcResponse>(responseJson);
-            return response ?? IpcResponse.Fail("Invalid response");
+                if (string.IsNullOrEmpty(responseJson))
+                {
+                    return IpcResponse.Fail("Empty response");
+                }
+
+                var response = JsonSerializer.Deserialize<IpcResponse>(responseJson);
+                return response ?? IpcResponse.Fail("Invalid response");
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                return IpcResponse.Fail("连接超时");
+            }
+            catch (IOException)
+            {
+                return IpcResponse.Fail("连接已断开");
+            }
         }
 
         private async Task<T?> CallSkeletonAsync<T>(string action, object? parameters = null, CancellationToken ct = default)
@@ -116,6 +135,15 @@ namespace KfuPet.Ipc.Client
         public IReadOnlyList<string> GetBoneIds()
         {
             return CallSkeletonAsync<IReadOnlyList<string>>("GetBoneIds").GetAwaiter().GetResult()
+                ?? Array.Empty<string>();
+        }
+
+        /// <summary>
+        /// 异步获取骨骼 ID 列表，供连接流程直接 await，避免跨线程抛异常导致调试器中断。
+        /// </summary>
+        public async Task<IReadOnlyList<string>> GetBoneIdsAsync(CancellationToken ct = default)
+        {
+            return await CallSkeletonAsync<IReadOnlyList<string>>("GetBoneIds", null, ct)
                 ?? Array.Empty<string>();
         }
 
