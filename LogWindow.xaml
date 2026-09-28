@@ -7,7 +7,7 @@
         xmlns:helpers="clr-namespace:KfuPet_Tool.Helpers"
         mc:Ignorable="d"
         Title="服务端日志" Height="600" Width="900"
-        WindowStartupLocation="CenterOwner">
+        WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <helpers:InvertBoolConverter x:Key="invertBoolConverter"/>
     </Window.Resources>

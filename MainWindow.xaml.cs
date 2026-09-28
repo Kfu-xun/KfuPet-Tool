@@ -116,7 +116,7 @@ namespace KfuPet_Tool
         {
             if (_logWindow == null)
             {
-                _logWindow = new LogWindow { Owner = this };
+                _logWindow = new LogWindow();
                 _logWindow.Closed += (_, _) => _logWindow = null;
             }
 
