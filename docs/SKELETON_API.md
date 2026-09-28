@@ -219,7 +219,7 @@ string? parentId = client.GetParentBoneId("arm_left_lower");
 
 ```csharp
 var children = client.GetChildBoneIds("body");
-// 返回 ["neck", "arm_left_upper", "arm_right_upper"]
+// 返回 ["head", "arm_left_upper", "arm_right_upper"]
 ```
 
 **对应 action**：`GetChildBoneIds`
@@ -990,9 +990,8 @@ var ids = client.GetBoneAttachments("head");
 | 骨骼 ID | 名称 | 父骨骼 | 说明 |
 |---------|------|--------|------|
 | root | Root | 无 | 根骨骼（世界锚点），位于画布中心，不承载图片 |
-| body | Body | root | 身体主干 |
-| neck | Neck | body | 颈部 |
-| head | Head | neck | 头部 |
+| body | Body | root | 身体主干（锚点位于颈部根部） |
+| head | Head | body | 头部 |
 | arm_left_upper | LeftArmUpper | body | 左上臂 |
 | arm_left_lower | LeftArmLower | arm_left_upper | 左小臂 |
 | arm_right_upper | RightArmUpper | body | 右上臂 |
@@ -1007,8 +1006,7 @@ var ids = client.GetBoneAttachments("head");
 ```
 root
 ├── body
-│   ├── neck
-│   │   └── head
+│   ├── head
 │   ├── arm_left_upper
 │   │   └── arm_left_lower
 │   └── arm_right_upper
@@ -1076,11 +1074,11 @@ client.Batch(b =>
 using var client = new SkeletonPipeClient();
 
 // 头部向下点头
-client.SetRotation("neck", 15);
+client.SetRotation("head", 15);
 
 // 稍后复位
 Thread.Sleep(200);
-client.SetRotation("neck", 0);
+client.SetRotation("head", 0);
 ```
 
 ### 示例 3：行走姿势
@@ -1124,6 +1122,12 @@ client.SetRotation("arm_left_upper", 45);
 ## 日志管道
 
 KfuPet 通过独立的命名管道 `KfuPet.Log` 向外部工具单向推送运行日志，供开发者工具实时查看程序状态。日志管道采用「推送」模型：客户端连接后先收到历史日志，之后实时接收新日志。
+
+> 日志管道**常开**：不受「开发者模式」开关影响，程序启动时（单实例检查通过后）即开始监听，退出时关闭。
+> 开发者模式只控制 `KfuPet.Skeleton` 命令管道。
+>
+> 日志同时异步落盘到 `%AppData%\KfuPet\Logs\KfuPet-yyyyMMdd-HHmmss.log`（**每次启动一个文件**，启动时清理旧文件，
+> 目录内最多保留 4 份），设置窗口「关于」页的「打开日志」按钮可直接打开该目录并选中本次运行的日志文件。
 
 ### 管道信息
 
