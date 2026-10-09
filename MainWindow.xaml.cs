@@ -109,7 +109,7 @@ namespace KfuPet_Tool
 
         private void Exit_Click(object sender, RoutedEventArgs e)
         {
-            Close();
+            Application.Current.Shutdown();
         }
 
         private void ServerLog_Click(object sender, RoutedEventArgs e)
