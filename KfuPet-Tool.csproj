@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -7,6 +7,15 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <Version>0.0.9</Version>
+    <Authors>Grey Bullet Technology Studio</Authors>
+    <Company>KfuPet</Company>
+    <Product>KfuPet Tool</Product>
+    <AssemblyTitle>KfuPet 官方创作者工具</AssemblyTitle>
+    <Copyright>Copyright (C) 2026 KfuPet</Copyright>
+    <FileVersion>$(Version)</FileVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
