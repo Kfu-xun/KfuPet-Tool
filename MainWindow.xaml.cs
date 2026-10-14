@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using KfuPet_Tool.Helpers;
 using KfuPet_Tool.Models;
 using KfuPet_Tool.ViewModels;
 
@@ -11,7 +12,6 @@ namespace KfuPet_Tool
     public partial class MainWindow : Window
     {
         private MainViewModel _viewModel;
-        private LogWindow? _logWindow;
 
         public MainWindow()
         {
@@ -114,14 +114,7 @@ namespace KfuPet_Tool
 
         private void ServerLog_Click(object sender, RoutedEventArgs e)
         {
-            if (_logWindow == null)
-            {
-                _logWindow = new LogWindow();
-                _logWindow.Closed += (_, _) => _logWindow = null;
-            }
-
-            _logWindow.Show();
-            _logWindow.Activate();
+            LogWindowService.Show();
         }
 
         private void About_Click(object sender, RoutedEventArgs e)

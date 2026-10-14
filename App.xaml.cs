@@ -1,6 +1,7 @@
 using System.Configuration;
 using System.Data;
 using System.Windows;
+using KfuPet_Tool.Helpers;
 
 namespace KfuPet_Tool
 {
@@ -25,8 +26,28 @@ namespace KfuPet_Tool
                 return;
             }
 
-            var mainWindow = new MainWindow();
-            mainWindow.Show();
+            // 启动阶段先弹选择窗，此时不能因“最后一个窗口关闭”而退出进程，
+            // 因此临时切换为显式关闭，待目标窗口启动完成后再恢复。
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+            var launcher = new LauncherWindow();
+            if (launcher.ShowDialog() != true)
+            {
+                Shutdown();
+                return;
+            }
+
+            if (launcher.LaunchMainProgram)
+            {
+                new MainWindow().Show();
+            }
+
+            if (launcher.LaunchServerLog)
+            {
+                LogWindowService.Show();
+            }
+
+            ShutdownMode = ShutdownMode.OnLastWindowClose;
         }
     }
 
